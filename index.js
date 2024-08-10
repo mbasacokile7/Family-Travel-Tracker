@@ -65,11 +65,31 @@ app.post("/add", async (req, res) => {
     console.log(err);
   }
 });
-app.post("/user", async (req, res) => {});
+app.post("/user", async (req, res) => {
+  // Load new.ejs when "Add Family Member Button is clicked"
+  if(req.body.add === "new"){
+    res.render("new.ejs");
+  } else{
+    //If the button is not pressed then
+    console.log(req.body);
+    const countries = await checkVisisted();
+    const userID = (req.body.user) - 1;
+    console.log(users[userID].color);
+    res.render("index.ejs", 
+      {
+        users: users,
+        color: users[userID].color,
+        total:countries.length,
+        countries: countries
+      });
+  };
+});
 
 app.post("/new", async (req, res) => {
   //Hint: The RETURNING keyword can return the data that was inserted.
   //https://www.postgresql.org/docs/current/dml-returning.html
+  
+  res.render("new.ejs");
 });
 
 app.listen(port, () => {
