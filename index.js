@@ -14,6 +14,7 @@ const db = new pg.Client({
 });
 db.connect();
 
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
@@ -25,24 +26,41 @@ let users = [
 ];
 
 async function checkVisisted() {
-  const result = await db.query("SELECT country_code FROM visited_countries");
+  // GET the countries codes for a specific user
+  // Join the users and visited_countries tables, by finding the matching user-id
+  const result = await db.query("SELECT country_code FROM visited_countries JOIN users ON users.id = visited_countries.user_id WHERE user_id =$1",
+    [currentUserId]
+  );
   let countries = [];
   result.rows.forEach((country) => {
     countries.push(country.country_code);
   });
   return countries;
 }
+
+//Create a function to find the current user
+async function getCurrentUser(){
+  const result =  await db.query("SELECT * FROM users");
+  users = result.rows
+  return users.find((user) => user.id == currentUserId);
+};
+
+
 app.get("/", async (req, res) => {
   const countries = await checkVisisted();
+  const currentUser = await getCurrentUser();
+  console.log(currentUser);
   res.render("index.ejs", {
     countries: countries,
     total: countries.length,
     users: users,
-    color: "teal",
+    color: currentUser.color,
   });
 });
+
 app.post("/add", async (req, res) => {
   const input = req.body["country"];
+  const currentUser = await getCurrentUser();
 
   try {
     const result = await db.query(
@@ -54,8 +72,8 @@ app.post("/add", async (req, res) => {
     const countryCode = data.country_code;
     try {
       await db.query(
-        "INSERT INTO visited_countries (country_code) VALUES ($1)",
-        [countryCode]
+        "INSERT INTO visited_countries (country_code, user_id) VALUES ($1, $2)",
+        [countryCode, currentUserId]
       );
       res.redirect("/");
     } catch (err) {
@@ -65,31 +83,44 @@ app.post("/add", async (req, res) => {
     console.log(err);
   }
 });
+//Create a function to join three tables
+// The travel_data table, the users table and the visited_countries 
+
+
+
 app.post("/user", async (req, res) => {
   // Load new.ejs when "Add Family Member Button is clicked"
   if(req.body.add === "new"){
     res.render("new.ejs");
   } else{
-    //If the button is not pressed then
-    console.log(req.body);
-    const countries = await checkVisisted();
-    const userID = (req.body.user) - 1;
-    console.log(users[userID].color);
-    res.render("index.ejs", 
-      {
-        users: users,
-        color: users[userID].color,
-        total:countries.length,
-        countries: countries
-      });
-  };
+    currentUserId = req.body.user;
+    res.redirect("/");
+  }
 });
 
 app.post("/new", async (req, res) => {
   //Hint: The RETURNING keyword can return the data that was inserted.
   //https://www.postgresql.org/docs/current/dml-returning.html
+
+  //Capture and store the Name Entered and colour selected
+  const newMember = req.body.name;
+  const memberColor = req.body.color;
+  const memberData = {id: users.length + 1 , name: newMember, color:memberColor};
+
+  //Add memberData object into the users array
+  users.push(memberData);
+  //INSERT data into the users table
+  try{
+    const result = await db.query("INSERT INTO users (name, color) VALUES ($1,$2) RETURNING * ;",
+      [newMember, memberColor]);
+    
+    const id = result.rows[0].id
+    currentUserId = id;
+    res.redirect("/");
   
-  res.render("new.ejs");
+  }catch(err){
+    console.log(err);
+  }
 });
 
 app.listen(port, () => {
